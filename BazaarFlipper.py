@@ -109,8 +109,6 @@ def craft_flipper():
     sb_items = []
     formatting_codes = ["§4", "§c", "§6", "§e", "§2", "§a", "§b", "§3", "§1", "§9", "§d", "§5", "§f", "§7", "§8", "§0",
                         "§k", "§l", "§m", "§n", "§o", "§r"]
-    i = 0
-    regex_removal = "r{}".format(formatting_codes[i])
     for item in items:
         item_path = "./neu-repo/items/{}".format(item)
         current_item = open(item_path, "r", encoding="utf-8")
@@ -121,15 +119,16 @@ def craft_flipper():
             if "recipe" in current_item:
                 current_item_recipe = current_item["recipe"]
                 for i in range(len(formatting_codes)):
-                    current_item_ah_name = re.sub(regex_removal, '', current_item_ah_name)
+                    current_item_ah_name = current_item_ah_name.replace("{}".format(formatting_codes[i]), "")
                 current_item_ah_name = current_item_ah_name.lower()
-                current_item_ah_name = re.sub(r" ", '', current_item_name)
-                current_item_auctions = requests.get("https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + current_item_ah_name).json()
-                print("https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + current_item_ah_name)
+                current_item_ah_name = re.sub(r" ", '', current_item_ah_name)
+                current_item_auctions = list(requests.get("https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + current_item_ah_name).json())
                 print(current_item_auctions)
-                if is_file_empty_(current_item_auctions) == False:
+                if current_item_auctions != []:
                     sb_items.append(current_item_name)
                     print(current_item_name)
+
+
 
     print(sb_items)
 
