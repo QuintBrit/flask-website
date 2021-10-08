@@ -104,33 +104,68 @@ def is_file_empty_(file_name):
     except TypeError:
         return False
 
-def craft_flipper():
-    items = list(os.listdir("./neu-repo/items"))
-    sb_items = []
+def auction_declarations(itemname):
     formatting_codes = ["§4", "§c", "§6", "§e", "§2", "§a", "§b", "§3", "§1", "§9", "§d", "§5", "§f", "§7", "§8", "§0",
                         "§k", "§l", "§m", "§n", "§o", "§r"]
+    for i in range(len(formatting_codes)):
+        itemname = itemname.replace("{}".format(formatting_codes[i]), "")
+    itemname = itemname.lower()
+    itemname = re.sub(r" ", '', itemname)
+    current_item_auctions = list(requests.get(
+        "https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + itemname).json())
+
+    return current_item_auctions
+
+def isAuctionable(itemname):
+    if auction_declarations(itemname) != []:
+        return True
+
+def isBazaarable(itemname):
+    products = list(requests.get("https://api.hypixel.net/skyblock/bazaar?key=" + apiKey).json()[
+                        "products"].keys())  # collects products from api
+    if itemname in products:
+        return True
+
+def getLowestBin(itemname):
+    while True:
+        current_item_auctions = list(requests.get(
+            "https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + itemname).json())
+        items = []
+        for auction in auctions:
+            try:
+                 # makes the input correctly cased (lapis =Lapis)
+                if auction["bin"] and str(auction["item_name"]).count(item.title()) > 0:
+                    items.append([auction["item_name"], auction["starting_bid"]])
+            except KeyError:
+                pass
+        items.sort(key=lambda x: x[1])
+        if not items:
+            continue
+        for item in items:
+            return item
+
+
+def craft_flipper():
+    items = list(os.listdir("./neu-repo/items"))
+    potential_bazaar_tier_ups = []
+    potential_flips = []
     for item in items:
         item_path = "./neu-repo/items/{}".format(item)
         current_item = open(item_path, "r", encoding="utf-8")
         current_item = json.loads(current_item.read())
         current_item_name = current_item["internalname"]
-        current_item_ah_name = current_item["displayname"]
+        current_item_name_formatted = current_item["displayname"]
         if isVanilla(current_item_name) == False:
             if "recipe" in current_item:
                 current_item_recipe = current_item["recipe"]
-                for i in range(len(formatting_codes)):
-                    current_item_ah_name = current_item_ah_name.replace("{}".format(formatting_codes[i]), "")
-                current_item_ah_name = current_item_ah_name.lower()
-                current_item_ah_name = re.sub(r" ", '', current_item_ah_name)
-                current_item_auctions = list(requests.get("https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + current_item_ah_name).json())
-                print(current_item_auctions)
-                if current_item_auctions != []:
-                    sb_items.append(current_item_name)
-                    print(current_item_name)
+                if isAuctionable(current_item_name_formatted) == True:
+                    print(current_item_name, "is auctionable")
+                    potential_flips.append([current_item_name, getLowestBin(current_item_name_formatted)])
+                    print(potential_flips)
+                elif isBazaarable(current_item_name) == True:
+                    potential_bazaar_tier_ups.append(current_item_name)
+                    print(current_item_name, "is bazaarable")
 
-
-
-    print(sb_items)
 
 
 # Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
