@@ -1,11 +1,11 @@
 from flask import Flask, render_template
-import BazaarFlipper
+import main
 from git import Repo
 
 app = Flask(__name__, template_folder="templates")
 
-BazaarFlipper.build_table()
-Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
+main.build_table()
+#Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
 
 @app.route("/")
 def index():

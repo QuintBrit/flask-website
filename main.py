@@ -3,19 +3,17 @@ If I have time I will also include profit % and order filling speed.'''
 
 import requests, HTML, json, os, re
 from git import Repo
+from dotenv import load_dotenv
+load_dotenv()
 
-while True:
-    apiKey = "c9e849c0-6be0-4187-b209-e1f4674608b7"
-    break
+apiKey = os.environ.get("apikey")
 
-
-# api key - hidden for obvious reasons
 
 def bazaar_flipper():
     bazaar_webpage = requests.get("https://api.slothpixel.me/api/skyblock/bazaar/")
     bazaar_data = json.loads(bazaar_webpage.text)  # acquiring data from api
-    bazaar_items = open("Items.json", "r")
-    bazaar_items = json.loads(bazaar_items.read())
+    bazaar_items = requests.get("https://api.hypixel.net/resources/skyblock/items")
+    bazaar_items = json.loads(bazaar_items.text)
 
     products = list(requests.get("https://api.hypixel.net/skyblock/bazaar?key=" + apiKey).json()[
                         "products"].keys())  # collects products from api
@@ -27,7 +25,12 @@ def bazaar_flipper():
 
     products.remove("ENCHANTED_CARROT_ON_A_STICK")
     products.remove("BAZAAR_COOKIE")
-    bazaar_items.pop("ENCHANTED_CARROT_ON_A_STICK")  # removes glitched products
+    for i in range(len(bazaar_items["items"])):
+        try:
+            if bazaar_items["items"][i]["id"] == "ENCHANTED_CARROT_ON_A_STICK":
+                bazaar_items["items"].pop(i) # removes glitched products
+        except IndexError:
+            break
 
     for i in range(len(products)):
         buy_order_price.append(bazaar_data[products[i]]["buy_summary"][0]["pricePerUnit"])  # finds lowest buy price
@@ -36,11 +39,12 @@ def bazaar_flipper():
         profit_percentage.append(round(product_margins[i] / buy_order_price[i], 2))  # calculates % profit
         profit_percentage[i] = "{:,}".format(profit_percentage[i])
         product_margins[i] = "{:,}".format(product_margins[i])
-        item_names.append(bazaar_items[products[i]])
+        if bazaar_items["items"][i]["id"] == products[i]:
+            item_names.append(bazaar_items["name"])
 
     final_products = zip(item_names, products, product_margins, profit_percentage)  # combines the lists
-
-    return final_products
+    final_products_list = list(final_products)
+    return final_products_list
 
 
 def build_table():
@@ -90,19 +94,11 @@ def isVanilla(pItem):
             else:
                 return False
 
-def is_file_empty_(file_name):
-    #Check if file is empty by reading first character in it
-    #open file in read mode
-    try:
-        with open(file_name, 'r') as read_obj:
-            # read first character
-            one_char = read_obj.read(1)
-            # if not fetched then file is empty
-            if not one_char:
-               return True
-        return False
-    except TypeError:
-        return False
+
+def render_item(itemname):
+    head = "https://sky.shiiyu.moe/item/".format(itemname)
+    return head
+
 
 def auction_declarations(itemname):
     formatting_codes = ["§4", "§c", "§6", "§e", "§2", "§a", "§b", "§3", "§1", "§9", "§d", "§5", "§f", "§7", "§8", "§0",
@@ -116,9 +112,11 @@ def auction_declarations(itemname):
 
     return current_item_auctions
 
+
 def isAuctionable(itemname):
     if auction_declarations(itemname) != []:
         return True
+
 
 def isBazaarable(itemname):
     products = list(requests.get("https://api.hypixel.net/skyblock/bazaar?key=" + apiKey).json()[
@@ -126,41 +124,54 @@ def isBazaarable(itemname):
     if itemname in products:
         return True
 
-def getLowestBin(itemname):
+
+def getLowestBin(itemname, isBook):
+    total_pages = 100  #test value, we'll see how it goes
     while True:
-        current_item_auctions = list(requests.get(
-            "https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + itemname).json())
-        items = []
-        for auction in auctions:
-            try:
-                 # makes the input correctly cased (lapis =Lapis)
-                if auction["bin"] and str(auction["item_name"]).count(item.title()) > 0:
-                    items.append([auction["item_name"], auction["starting_bid"]])
-            except KeyError:
-                pass
-        items.sort(key=lambda x: x[1])
-        if not items:
-            continue
-        for item in items:
-            return item
+        if isBook == True:
+            itemname = "/ebs%20" + itemname
+            for page_num in range(total_pages):
+                current_item_auctions = list(requests.get(
+                    f"https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query={itemname}&page={page_num}").json())
+                items = []
+                for auction in current_item_auctions:
+                    try:
+                        if auction["bin"] == True and auction["item_name"] == "Enchanted Book":
+                            items.append(auction["starting_bid"])
+                    except KeyError:
+                        pass
+                items = sorted(items)
+                if not items:
+                    continue
+                return items[0]
 
 
 def craft_flipper():
     items = list(os.listdir("./neu-repo/items"))
     potential_bazaar_tier_ups = []
     potential_flips = []
+    isBook = False
     for item in items:
         item_path = "./neu-repo/items/{}".format(item)
         current_item = open(item_path, "r", encoding="utf-8")
         current_item = json.loads(current_item.read())
         current_item_name = current_item["internalname"]
-        current_item_name_formatted = current_item["displayname"]
+        if "Enchanted Book" in current_item["displayname"]:
+            isBook = True
+        current_item_api_data = requests.get("https://api.hypixel.net/resources/skyblock/items")
+        current_item_api_data = json.loads(current_item_api_data.text)
+        for i in range(len(current_item_api_data["items"])):
+            try:
+                if current_item_api_data["items"][i]["id"] == current_item_name:
+                    current_item_name_formatted = current_item_api_data["items"][i]["name"]
+            except IndexError:
+                break
         if isVanilla(current_item_name) == False:
             if "recipe" in current_item:
                 current_item_recipe = current_item["recipe"]
                 if isAuctionable(current_item_name_formatted) == True:
                     print(current_item_name, "is auctionable")
-                    potential_flips.append([current_item_name, getLowestBin(current_item_name_formatted)])
+                    potential_flips.append([current_item_name, getLowestBin(current_item_name_formatted, isBook)])
                     print(potential_flips)
                 elif isBazaarable(current_item_name) == True:
                     potential_bazaar_tier_ups.append(current_item_name)
@@ -168,5 +179,6 @@ def craft_flipper():
 
 
 
-# Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
+
+#Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
 craft_flipper()
