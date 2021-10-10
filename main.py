@@ -81,69 +81,117 @@ def build_table():
 
 def isVanilla(pItem):
     vanilla_items = ["WOOD_AXE", "WOOD_HOE", "WOOD_PICKAXE", "WOOD_SPADE", "WOOD_SWORD", "GOLD_AXE", "GOLD_HOE",
-                     "GOLD_PICKAXE", "GOLD_SPADE", "GOLD_SWORD", "ROOKIE_HOE"]
-    filename = pItem + ".json"
-    for root, dir, files in os.walk(".\\neu-repo\\items"):
+                     "GOLD_PICKAXE", "GOLD_SPADE", "GOLD_SWORD", "ROOKIE_HOE"] #hardcoded vanilla items
+    filename = pItem + ".json" #attaches .json to the filename so it is processed correctly
+    for root, dir, files in os.walk(".\\neu-repo\\items"): #loops through directory
         if filename in files:
             current_item = open(".\\neu-repo\\items\\"+filename, "r", encoding="utf-8", )
             current_item = json.loads(current_item.read())
-            if pItem in vanilla_items:
+            if pItem in vanilla_items: #checks if in hardcoded vanilla items
                 return True
-            elif 'vanilla' in current_item:
+            elif 'vanilla' in current_item: #checks if they have 'vanilla' in file
                 return True
             else:
                 return False
 
 
 def render_item(itemname):
-    head = "https://sky.shiiyu.moe/item/".format(itemname)
+    head = "https://sky.shiiyu.moe/item/".format(itemname) #uses the sky.shiiyu api to render heads for me.
     return head
 
 
 def auction_declarations(itemname):
     formatting_codes = ["§4", "§c", "§6", "§e", "§2", "§a", "§b", "§3", "§1", "§9", "§d", "§5", "§f", "§7", "§8", "§0",
-                        "§k", "§l", "§m", "§n", "§o", "§r"]
+                        "§k", "§l", "§m", "§n", "§o", "§r"] #sets up formatting codes so I can ignore them
     for i in range(len(formatting_codes)):
-        itemname = itemname.replace("{}".format(formatting_codes[i]), "")
+        itemname = itemname.replace("{}".format(formatting_codes[i]), "") #as above
     itemname = itemname.lower()
     itemname = re.sub(r" ", '', itemname)
     current_item_auctions = list(requests.get(
-        "https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + itemname).json())
+        "https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + itemname).json()) #create a list of the current auctions from hysky api
 
     return current_item_auctions
 
 
 def isAuctionable(itemname):
-    if auction_declarations(itemname) != []:
+    if auction_declarations(itemname) != []: #checks if there's any auctions for [item]. note this may break when encountering extremely rare items such as dctr's space helmet
         return True
 
 
 def isBazaarable(itemname):
     products = list(requests.get("https://api.hypixel.net/skyblock/bazaar?key=" + apiKey).json()[
                         "products"].keys())  # collects products from api
-    if itemname in products:
+    if itemname in products: #checks if product is in the list of bazaar products
         return True
 
 
-def getLowestBin(itemname, isBook):
-    total_pages = 100  #test value, we'll see how it goes
+def get_lowest_bin(itemname, isBook):
+    total_pages = 50  #test value, we'll see how it goes
     while True:
-        if isBook == True:
+        if isBook == True: #because hysky api is weird, you need to use /ebs to find books
             itemname = "/ebs%20" + itemname
-            for page_num in range(total_pages):
+            for page_num in range(total_pages): #iterates through all pages of ah
                 current_item_auctions = list(requests.get(
                     f"https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query={itemname}&page={page_num}").json())
                 items = []
                 for auction in current_item_auctions:
                     try:
                         if auction["bin"] == True and auction["item_name"] == "Enchanted Book":
+                            items.append(auction["starting_bid"]) #finds all book bins on ah
+                    except KeyError:
+                        pass
+                items = sorted(items)
+                if not items:
+                    continue
+                return items[0] #only returns lowest bin
+        else:
+            for page_num in range(total_pages):
+                current_item_auctions = list(requests.get(
+                    f"https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query={itemname}&page={page_num}").json())
+                items = []
+                for auction in current_item_auctions:
+                    try:
+                        if auction["bin"] == True:
                             items.append(auction["starting_bid"])
                     except KeyError:
                         pass
                 items = sorted(items)
                 if not items:
                     continue
-                return items[0]
+                return items[0] #see above lol
+
+
+def get_recipe(itemname):
+    recipe_ids = ["A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3"]
+    current_item_recipe = []
+    item_path = "./neu-repo/items/{}".format(itemname)
+    current_item = open(item_path, "r", encoding="utf-8")
+    current_item = json.loads(current_item.read())
+    for i in range(9):
+        current_item_recipe.append(current_item["recipe"][f"{recipe_ids[i]}"])
+
+    return current_item_recipe
+
+def total_bazaar_price(itemname):
+    total_price_array = []
+    total_price = 0
+    bazaar_webpage = requests.get("https://api.slothpixel.me/api/skyblock/bazaar/")
+    bazaar_data = json.loads(bazaar_webpage.text)
+
+    current_item_recipe = get_recipe(itemname)
+
+    for i in range(9):
+        head, sep, tail = current_item_recipe[i].partition(":")
+        if current_item_recipe[i] != "":
+            total_price_array.append(float(bazaar_data[head]["buy_summary"][0]["pricePerUnit"])*float(current_item_recipe[i][-2] + current_item_recipe[i][-1]))
+        else:
+            total_price_array.append(0)
+
+    for i in range(9):
+        total_price += total_price_array[i]
+
+
+    return total_price
 
 
 def craft_flipper():
@@ -169,16 +217,16 @@ def craft_flipper():
         if isVanilla(current_item_name) == False:
             if "recipe" in current_item:
                 current_item_recipe = current_item["recipe"]
-                if isAuctionable(current_item_name_formatted) == True:
-                    print(current_item_name, "is auctionable")
-                    potential_flips.append([current_item_name, getLowestBin(current_item_name_formatted, isBook)])
-                    print(potential_flips)
-                elif isBazaarable(current_item_name) == True:
+                if isBazaarable(current_item_name) == True:
                     potential_bazaar_tier_ups.append(current_item_name)
                     print(current_item_name, "is bazaarable")
-
+                elif isAuctionable(current_item_name_formatted) == True:
+                    print(current_item_name, "is auctionable")
+                    potential_flips.append([current_item_name, get_lowest_bin(current_item_name_formatted, isBook)])
+                    print(potential_flips)
 
 
 
 #Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
-craft_flipper()
+#craft_flipper()
+get_recipe("ENCHANTED_ANCIENT_CLAW.json")
