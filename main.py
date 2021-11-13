@@ -1,7 +1,8 @@
 '''This program finds products with the biggest difference between buy and sell offers and ranks them by most profit.
 If I have time I will also include profit % and order filling speed.'''
+import re
 
-import requests, HTML, json, os, base64, json2table, json2html
+import requests, HTML, json, os, base64, tabulate, json2html
 from git import Repo
 from dotenv import load_dotenv
 
@@ -16,7 +17,13 @@ def bazaar_flipper():
     products = list(requests.get("https://api.hypixel.net/skyblock/bazaar?key=" + apiKey).json()[
                         "products"].keys())  # collects products from api
     default_values = {"Item": "", "Id": "", "Product Margin": 0, "Profit %": 0, "Buy Price": 0, "Sell Price": 0}
-    final_products = []
+    final_products = {}
+    final_products["item_name"] = {}
+    final_products["id"] = {}
+    final_products["buy_order_price"] = {}
+    final_products["sell_order_price"] = {}
+    final_products["product_margins"] = {}
+    final_products["profit_percentage"] = {}
     # initialising variables
 
     products.remove("ENCHANTED_CARROT_ON_A_STICK")
@@ -25,28 +32,29 @@ def bazaar_flipper():
 
     for i in range(len(products)):
         current_product = products[i]
-        print(current_product)
-        buy_order_price = bazaar_data[current_product]["buy_summary"][0]["pricePerUnit"]  # finds lowest buy price
-        sell_order_price = bazaar_data[current_product]["sell_summary"][0]["pricePerUnit"]  # finds highest sell price
-        product_margins = float(round((buy_order_price - sell_order_price), 1))  # calculates margin
-        profit_percentage = round(product_margins / buy_order_price, 2)  # calculates % profit
-        product_margins = "{:,}".format(product_margins)  # adds commas
-        profit_percentage = "{:,}".format(profit_percentage)  # adds commas
-        item_name = remove_formatting(id_to_name(current_product))
-        final_products[current_product] = {"item_name": item_name, "id": current_product,
-                                           "product_margins": product_margins, "profit_percentage": profit_percentage,
-                                           "buy_order_price": buy_order_price, "sell_order_price": sell_order_price}
+        final_products["item_name"][i] = remove_formatting(id_to_name(current_product))
+        final_products["id"][i] = current_product
+        final_products["buy_order_price"][i] = bazaar_data[current_product]["buy_summary"][0]["pricePerUnit"]  # finds lowest buy price
+        final_products["sell_order_price"][i] = bazaar_data[current_product]["sell_summary"][0]["pricePerUnit"]  # finds highest sell price
+        product_margins = float(round((final_products["buy_order_price"][i] - final_products["sell_order_price"][i]), 1))  # calculates margin
+        profit_percentage = round(product_margins / final_products["buy_order_price"][i], 2)  # calculates % profit
+        final_products["product_margins"][i] = "{:,}".format(product_margins)  # adds commas
+        final_products["profit_percentage"][i] = "{:,}".format(profit_percentage)  # adds commas
 
-    return final_products
+    desired_order_list = ["item_name", "id", "product_margins", "profit_percentage", "buy_order_price", "sell_order_price"]
+    reordered_final_products = {k: final_products[k] for k in desired_order_list}
+    # for i in range(len(products)):
+    #
+    print(reordered_final_products)
+    return reordered_final_products
 
 
 def build_table(table_data, path):
     HTMLFILE = path  # sets the file
     f = open(HTMLFILE, 'w+')  # opens the file
     table_attributes = '"class": "table table-striped" border="1" style="border: 1px solid #000000; border-collapse: collapse;" cellpadding="4" id="data"'
-    htmlcode = json2html.json2html.convert(json=table_data, table_attributes=table_attributes, clubbing) # transforms it into a table with module magic
-
-    f.write(htmlcode)  # writes the table to the file/
+    htmlcode = json2html.json2html.convert(json=table_data, table_attributes=table_attributes) # transforms it into a table with module magic
+    f.write(htmlcode)  # writes the table to the file
 
 
 def isVanilla(pItem):
@@ -224,10 +232,12 @@ def worth_recombing():
         return True
 
 
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # main
 
 # Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
 # craft_flipper()
 # worth_recombing()
-build_table(bazaar_flipper(), "./templates/flipper_data.html")
+# build_table(bazaar_flipper(), "./templates/flipper_data.html")
