@@ -1,84 +1,52 @@
 '''This program finds products with the biggest difference between buy and sell offers and ranks them by most profit.
 If I have time I will also include profit % and order filling speed.'''
 
-import requests, HTML, json, os, re
+import requests, HTML, json, os, base64, json2table, json2html
 from git import Repo
 from dotenv import load_dotenv
 
 load_dotenv()
 
 apiKey = os.environ.get("apikey")
-nestcount = 0
 
 
 def bazaar_flipper():
     bazaar_webpage = requests.get("https://api.slothpixel.me/api/skyblock/bazaar/")
     bazaar_data = json.loads(bazaar_webpage.text)  # acquiring data from api
-    bazaar_items = requests.get("https://api.hypixel.net/resources/skyblock/items")
-    bazaar_items = json.loads(bazaar_items.text)
-
     products = list(requests.get("https://api.hypixel.net/skyblock/bazaar?key=" + apiKey).json()[
                         "products"].keys())  # collects products from api
+    default_values = {"Item": "", "Id": "", "Product Margin": 0, "Profit %": 0, "Buy Price": 0, "Sell Price": 0}
     final_products = []
-    buy_order_price = []
-    sell_order_price = []
-    product_margins = []
-    profit_percentage = []
-    item_names = []  # initialising variables
+    # initialising variables
 
     products.remove("ENCHANTED_CARROT_ON_A_STICK")
     products.remove("BAZAAR_COOKIE")
-    for i in range(len(bazaar_items["items"])):
-        try:
-            if bazaar_items["items"][i]["id"] == "ENCHANTED_CARROT_ON_A_STICK":
-                bazaar_items["items"].pop(i)  # removes glitched products
-        except IndexError:
-            break
+
 
     for i in range(len(products)):
-        buy_order_price.append(bazaar_data[products[i]]["buy_summary"][0]["pricePerUnit"])  # finds lowest buy price
-        sell_order_price.append(bazaar_data[products[i]]["sell_summary"][0]["pricePerUnit"])  # finds highest sell price
-        product_margins.append(round((buy_order_price[i] - sell_order_price[i]), 1))  # calculates margin
-        profit_percentage.append(round(product_margins[i] / buy_order_price[i], 2))  # calculates % profit
-        profit_percentage[i] = "{:,}".format(profit_percentage[i])
-        product_margins[i] = "{:,}".format(product_margins[i])
-        if bazaar_items["items"][i]["id"] == products[i]:
-            item_names.append(bazaar_items["name"])
+        current_product = products[i]
+        print(current_product)
+        buy_order_price = bazaar_data[current_product]["buy_summary"][0]["pricePerUnit"]  # finds lowest buy price
+        sell_order_price = bazaar_data[current_product]["sell_summary"][0]["pricePerUnit"]  # finds highest sell price
+        product_margins = float(round((buy_order_price - sell_order_price), 1))  # calculates margin
+        profit_percentage = round(product_margins / buy_order_price, 2)  # calculates % profit
+        product_margins = "{:,}".format(product_margins)  # adds commas
+        profit_percentage = "{:,}".format(profit_percentage)  # adds commas
+        item_name = remove_formatting(id_to_name(current_product))
+        final_products[current_product] = {"item_name": item_name, "id": current_product,
+                                           "product_margins": product_margins, "profit_percentage": profit_percentage,
+                                           "buy_order_price": buy_order_price, "sell_order_price": sell_order_price}
 
-    final_products.append([item_names, products, product_margins, profit_percentage])  # combines the lists
     return final_products
 
 
-def build_table(func, path, header_row):
-    if func == 1:
-        table_data = bazaar_flipper()
+def build_table(table_data, path):
     HTMLFILE = path  # sets the file
     f = open(HTMLFILE, 'w+')  # opens the file
+    table_attributes = '"class": "table table-striped" border="1" style="border: 1px solid #000000; border-collapse: collapse;" cellpadding="4" id="data"'
+    htmlcode = json2html.json2html.convert(json=table_data, table_attributes=table_attributes, clubbing) # transforms it into a table with module magic
 
-    htmlcode = HTML.table(table_data, header_row)  # transforms it into a table with module magic
-
-    f.write(htmlcode)  # writes the table to the file
-
-    t = open(path, "r+")
-    replacement = t.read()
-    replacement = replacement.replace(
-        '<TABLE border="1" style="border: 1px solid #000000; border-collapse: collapse;" cellpadding="4"',
-        '<TABLE class="table table-striped" border="1" style="border: 1px solid #000000; border-collapse: collapse;" cellpadding="4" id="data"')
-    replacement = replacement.replace(
-        '<TABLE class="table table-striped" border="1" style="border: 1px solid #000000; border-collapse: collapse;" cellpadding="4" id="data">',
-        '<TABLE class="table table-striped" border="1" style="border: 1px solid #000000; border-collapse: collapse;" cellpadding="4" id="data">\n<thead>')
-    replacement = replacement.replace(
-        """<TH>Profit %</TH>
- </TR>""", """<TH>Profit %</TH>
- </TR>
-</thead>"""
-    )
-    replacement = replacement.replace(
-        '</TABLE>',
-        '</tbody>\n</TABLE>')
-    t.close()
-    t = open(path, "w+")
-    t.write(replacement)
+    f.write(htmlcode)  # writes the table to the file/
 
 
 def isVanilla(pItem):
@@ -102,25 +70,6 @@ def render_item(itemname):
     return head
 
 
-def auction_declarations(itemname):
-    formatting_codes = ["§4", "§c", "§6", "§e", "§2", "§a", "§b", "§3", "§1", "§9", "§d", "§5", "§f", "§7", "§8", "§0",
-                        "§k", "§l", "§m", "§n", "§o", "§r"]  # sets up formatting codes so I can ignore them
-    for i in range(len(formatting_codes)):
-        itemname = itemname.replace("{}".format(formatting_codes[i]), "")  # as above
-    itemname = itemname.lower()
-    itemname = re.sub(r" ", '', itemname)
-    current_item_auctions = list(requests.get(
-        "https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query=" + itemname).json())  # create a list of the current auctions from hysky api
-
-    return current_item_auctions
-
-
-def isAuctionable(itemname):
-    if auction_declarations(
-            itemname) != []:  # checks if there's any auctions for [item]. note this may break when encountering extremely rare items such as dctr's space helmet
-        return True
-
-
 def isBazaarable(itemname):
     products = list(requests.get("https://api.hypixel.net/skyblock/bazaar?key=" + apiKey).json()[
                         "products"].keys())  # collects products from api
@@ -128,47 +77,15 @@ def isBazaarable(itemname):
         return True
 
 
-def get_lowest_bin(itemname, isBook):
-    total_pages = 50  # test value, we'll see how it goes
-    while True:
-        if isBook == True:  # because hysky api is weird, you need to use /ebs to find books
-            itemname = "/ebs%20" + itemname
-            for page_num in range(total_pages):  # iterates through all pages of ah
-                current_item_auctions = list(requests.get(
-                    f"https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query={itemname}&page={page_num}").json())
-                items = []
-                for auction in current_item_auctions:
-                    try:
-                        if auction["bin"] == True and auction["item_name"] == "Enchanted Book":
-                            items.append(auction["starting_bid"])  # finds all book bins on ah
-                    except KeyError:
-                        pass
-                items = sorted(items)
-                if not items:
-                    continue
-                return items[0]  # only returns lowest bin
-        else:
-            for page_num in range(total_pages):
-                current_item_auctions = list(requests.get(
-                    f"https://hyskyapi.000webhostapp.com/apihandle.php?req=search&query={itemname}&page={page_num}").json())
-                items = []
-                for auction in current_item_auctions:
-                    try:
-                        if auction["bin"] == True:
-                            items.append(auction["starting_bid"])
-                    except KeyError:
-                        pass
-                items = sorted(items)
-                if not items:
-                    continue
-                return items[0]  # see above lol
+def get_lowest_bin(itemname):
+    data = requests.get(f"https://sky.coflnet.com/api/item/price/{itemname}/bin/").json()
+    return data["lowest"]
 
 
 def get_recipe(itemname):
     recipe_ids = ["A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3"]
     current_item_recipe = []
     item_path = "./neu-repo/items/{}".format(itemname)
-    print(item_path, itemname)
     current_item = open(item_path, "r", encoding="utf-8")
     current_item = json.loads(current_item.read())
     for i in range(9):
@@ -210,78 +127,101 @@ def bazaar_tier_up(itemname):
         return ""
 
 
-def get_craft_cost(itemname, nestings):
-    item_file = itemname + ".json"
-    recipe = get_recipe(item_file)
-    craft_cost = []
-    for item in recipe:
-        item_file = item + ".json"
-        if get_recipe(item_file) != "":
-            head, sep, tail = recipe[item].partition(":")
-            bazaarable = isBazaarable(head)
-            auctionable = isAuctionable(head)
-            if auctionable and bazaarable:
-                ingredient_lowest_bin = get_lowest_bin(itemname, False)
-                ingredient_lowest_bz_cost = total_bazaar_price(itemname)
-                if ingredient_lowest_bz_cost > ingredient_lowest_bin:
-                    craft_cost.append([item, ingredient_lowest_bin])
-                    print(craft_cost)
-                else:
-                    craft_cost.append([item, ingredient_lowest_bz_cost])
-                    print(craft_cost)
-            elif bazaarable:
-                ingredient_lowest_bz_cost = total_bazaar_price(itemname)
-                craft_cost.append([item, ingredient_lowest_bz_cost])
-                print(craft_cost)
-            elif auctionable:
-                ingredient_lowest_bin = get_lowest_bin(itemname, False)
-                craft_cost.append([item, ingredient_lowest_bin])
-                print(craft_cost)
-        else:
-            nestings += 1
-            if nestings < 7:
-                get_craft_cost(item, nestings)
-            else:
-                return craft_cost
-    return craft_cost
-
-
 def craft_flipper():
-    items = list(os.listdir("./neu-repo/items"))
-    potential_bazaar_tier_ups = []
-    bazaar_tier_ups = []
-    potential_flips = []
-    flips = []
-    isBook = False
-    for item in items:
-        item_path = "./neu-repo/items/{}".format(item)
-        current_item = open(item_path, "r", encoding="utf-8")
-        current_item = json.loads(current_item.read())
-        current_item_name = current_item["internalname"]
-        if "Enchanted Book" in current_item["displayname"]:
-            isBook = True
-        current_item_api_data = requests.get("https://api.hypixel.net/resources/skyblock/items")
-        current_item_api_data = json.loads(current_item_api_data.text)
-        for i in range(len(current_item_api_data["items"])):
-            try:
-                if current_item_api_data["items"][i]["id"] == current_item_name:
-                    current_item_name_formatted = current_item_api_data["items"][i]["name"]
-            except IndexError:
-                break
-        if isVanilla(current_item_name) == False:
-            if "recipe" in current_item:
-                current_item_recipe = current_item["recipe"]
-                if isBazaarable(current_item_name) == True:
-                    potential_bazaar_tier_ups.append(current_item_name)
-                    profit = bazaar_tier_up(current_item_name)
-                    if profit != "":
-                        bazaar_tier_ups.append([current_item_name, profit])
-                elif isAuctionable(current_item_name_formatted) == True:
-                    print(current_item_name, "is auctionable")
-                    potential_flips.append([current_item_name, get_lowest_bin(current_item_name_formatted, isBook)])
-                    print(potential_flips)
+    flips = requests.get(f"https://sky.coflnet.com/api/craft/profit/").json()
+    flips["profit"] = flips["sellPrice"] - flips["craftCost"]
+    flips["%profit"] = flips["profit"] / flips["craftCost"]
+    return flips
 
-    return bazaar_tier_ups, flips
+
+def name_to_id(itemname):
+    items = requests.get("https://api.hypixel.net/resources/skyblock/items")
+    items = json.loads(items.text)
+    for item in items["items"]:
+        if item["name"] == itemname:
+            return item["id"]
+
+
+def id_to_name(itemname):
+    items = requests.get("https://api.hypixel.net/resources/skyblock/items")
+    items = json.loads(items.text)
+    for item in items["items"]:
+        if item["id"] == itemname:
+            return item["name"]
+
+
+def remove_formatting(string):
+    formatting_codes = ["§4", "§c", "§6", "§e", "§2", "§a", "§b", "§3", "§1", "§9", "§d", "§5", "§f", "§7", "§8", "§0",
+                        "§k", "§l", "§m", "§n", "§o", "§r"]  # sets up formatting codes so I can ignore them
+    for i in range(len(formatting_codes)):
+        string = string.replace("{}".format(formatting_codes[i]), "")  # as above
+    return string
+
+
+def worth_recombing():
+    playername = input("What is your username? \n")
+    profile = input("What is your profile called? \n")
+    next_accessory = input(
+        "What is the next accessory you're going for? \n(You may wish to use clowns' spreadsheet: https://docs.google.com/spreadsheets/d/1cPNax1xoN_VP015ggfEeKfNsDuqrRcqTBNq73HoOVqU/edit#gid=1494351710) \n")
+    next_accessory_price = int(input("How much does it cost? \n"))
+    next_accessory_id = name_to_id(next_accessory)
+    reforge_stats = [1, 2, 3, 5, 8, 12]  # shows the str given from reforging to strong/level
+    recomb_price = requests.get("https://api.slothpixel.me/api/skyblock/bazaar/RECOMBOBULATOR_3000")
+    recomb_price = json.loads(recomb_price.text)
+    recomb_price = recomb_price["buy_summary"][0]["pricePerUnit"]
+
+    next_accessory_path = next_accessory_id + ".json"
+    item_path = "./neu-repo/items/{}".format(next_accessory_path)
+    next_accessory_file = open(item_path, "r", encoding="utf-8")
+    next_accessory_lore = json.loads(next_accessory_file.read())
+    next_accessory_lore = next_accessory_lore["lore"]
+    # next_accessory_price = get_lowest_bin(next_accessory_id, False)
+
+    if "COMMON" in next_accessory_lore:
+        next_accessory_reforge_stats = reforge_stats[0]
+        next_accessory_price_per_stats = next_accessory_reforge_stats / next_accessory_price
+    elif "UNCOMMON" in next_accessory_lore:
+        next_accessory_reforge_stats = reforge_stats[1]
+        next_accessory_price_per_stats = next_accessory_reforge_stats / next_accessory_price
+    elif "RARE" in next_accessory_lore:
+        next_accessory_reforge_stats = reforge_stats[2]
+        next_accessory_price_per_stats = next_accessory_reforge_stats / next_accessory_price
+    elif "EPIC" in next_accessory_lore:
+        next_accessory_reforge_stats = reforge_stats[3]
+        next_accessory_price_per_stats = next_accessory_reforge_stats / next_accessory_price
+    elif "LEGENDARY" in next_accessory_lore:
+        next_accessory_reforge_stats = reforge_stats[4]
+        next_accessory_price_per_stats = next_accessory_reforge_stats / next_accessory_price
+
+    profile_data = requests.get(f"https://api.slothpixel.me/api/skyblock/profile/{playername}/{profile}")
+    profile_data = json.loads(profile_data.text)
+    accessories = profile_data["talisman_bag"]
+    highest_current_accessory = accessories[0]
+    if highest_current_accessory["rarity"] == "common":
+        highest_current_accessory_upgraded_reforge_stats = reforge_stats[1] - reforge_stats[0]
+        highest_current_accessory_upgraded_price_per_stats = highest_current_accessory_upgraded_reforge_stats / recomb_price
+    elif highest_current_accessory["rarity"] == "uncommon":
+        highest_current_accessory_upgraded_reforge_stats = reforge_stats[2] - reforge_stats[1]
+        highest_current_accessory_upgraded_price_per_stats = highest_current_accessory_upgraded_reforge_stats / recomb_price
+    elif highest_current_accessory["rarity"] == "rare":
+        highest_current_accessory_upgraded_reforge_stats = reforge_stats[3] - reforge_stats[2]
+        highest_current_accessory_upgraded_price_per_stats = highest_current_accessory_upgraded_reforge_stats / recomb_price
+    elif highest_current_accessory["rarity"] == "epic":
+        highest_current_accessory_upgraded_reforge_stats = reforge_stats[4] - reforge_stats[3]
+        highest_current_accessory_upgraded_price_per_stats = highest_current_accessory_upgraded_reforge_stats / recomb_price
+    elif highest_current_accessory["rarity"] == "legendary":
+        highest_current_accessory_upgraded_reforge_stats = reforge_stats[5] - reforge_stats[4]
+        highest_current_accessory_upgraded_price_per_stats = highest_current_accessory_upgraded_reforge_stats / recomb_price
+
+    if next_accessory_price_per_stats > highest_current_accessory_upgraded_price_per_stats:
+        print(f"Buy the {next_accessory}!")
+        return False
+    elif next_accessory_price_per_stats == highest_current_accessory_upgraded_price_per_stats:
+        print(f"Buy the {next_accessory}")
+        return False
+    else:
+        print(f"Recombobulate your {remove_formatting(highest_current_accessory['name'])}")
+        return True
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -289,4 +229,5 @@ def craft_flipper():
 
 # Repo.clone_from("https://github.com/Moulberry/NotEnoughUpdates-REPO.git", "./neu-repo/")
 # craft_flipper()
-print(get_craft_cost("TERMINATOR", nestcount))
+# worth_recombing()
+build_table(bazaar_flipper(), "./templates/flipper_data.html")
