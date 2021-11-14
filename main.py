@@ -53,7 +53,11 @@ def build_table(table_data, path):
     HTMLFILE = path  # sets the file
     f = open(HTMLFILE, 'w+')  # opens the file
     table_attributes = '"class": "table table-striped" border="1" style="border: 1px solid #000000; border-collapse: collapse;" cellpadding="4" id="data"'
-    htmlcode = json2html.json2html.convert(json=table_data, table_attributes=table_attributes) # transforms it into a table with module magic
+    for i in range(len(table_data["id"])):
+
+        htmlcode = json2html.json2html.convert(json=table_data, table_attributes=table_attributes) # transforms it into a table with module magic
+
+
     f.write(htmlcode)  # writes the table to the file
 
 
