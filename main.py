@@ -153,7 +153,6 @@ def name_to_id(itemname):
         if item["name"] == itemname:
             return item["id"]
 
-
 def id_to_name(itemname):
     items = requests.get("https://api.hypixel.net/resources/skyblock/items")
     items = json.loads(items.text)
